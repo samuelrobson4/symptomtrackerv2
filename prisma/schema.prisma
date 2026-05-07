@@ -52,6 +52,12 @@ model Dose {
   takenAt    DateTime @default(now())
 }
 
+model Instruction {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+}
+
 model Message {
   id        String   @id @default(cuid())
   direction String

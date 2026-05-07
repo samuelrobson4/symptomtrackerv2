@@ -7,6 +7,7 @@ const links = [
   { href: "/", label: "Symptoms" },
   { href: "/medications", label: "Medications" },
   { href: "/connections", label: "Connections" },
+  { href: "/instructions", label: "AI Memory" },
 ];
 
 export default function Nav() {

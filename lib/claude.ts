@@ -18,10 +18,16 @@ export interface ParsedDrug {
 export interface ParsedSMS {
   symptoms: ParsedSymptom[];
   drugs: ParsedDrug[];
+  isInstruction: boolean;
+  instructionContent?: string;
   reply: string;
 }
 
-export async function parseSMS(message: string, context: string): Promise<ParsedSMS> {
+export async function parseSMS(message: string, context: string, instructions: string[]): Promise<ParsedSMS> {
+  const instructionBlock = instructions.length > 0
+    ? `\nUser-defined rules (follow these carefully):\n${instructions.map((i, n) => `${n + 1}. ${i}`).join("\n")}\n`
+    : "";
+
   const response = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 1024,
@@ -29,25 +35,28 @@ export async function parseSMS(message: string, context: string): Promise<Parsed
 
 Context about the user's current tracked data:
 ${context}
-
-Parse the incoming SMS and extract ALL symptoms AND medications mentioned. A single message may contain both.
+${instructionBlock}
+Parse the incoming SMS and extract ALL symptoms AND medications mentioned. A single message may contain both. Also detect if the message is an instruction to remember something for the future.
 
 Respond with JSON only:
 {
+  "isInstruction": boolean,
+  "instructionContent": string (only if isInstruction is true — the cleaned instruction to remember),
   "symptoms": [
     { "description": string, "severity": number (1-10, optional), "notes": string (optional) }
   ],
   "drugs": [
     { "name": string, "dosage": string (e.g. "300mg"), "frequency": string (e.g. "once daily"), "isNewDrug": boolean }
   ],
-  "reply": string (short friendly SMS reply confirming what was logged, max 160 chars)
+  "reply": string (short friendly SMS reply confirming what was logged or remembered, max 160 chars)
 }
 
 Rules:
+- isInstruction = true if message contains "remember", "always", "next time", "from now on", "going forward", "don't", "make sure", "note that" — treat it as a rule to store
 - Extract EVERY symptom mentioned (flu-like feelings, fatigue, itching, etc. are all separate symptoms)
 - Extract drug name cleanly (e.g. "Dupixent" not "dupixent 300mg injection")
 - Dosage should be clean (e.g. "300mg/2ml" not "300 mg two mil injection")
-- isNewDrug = true if they say "started", "beginning", "first time", "just got". false if they say "took", "took my", "had my dose", "injected today" (i.e. a recurring dose of an existing drug)
+- isNewDrug = true if they say "started", "beginning", "first time", "just got". false if they say "took", "took my", "had my dose", "injected today"
 - Estimate severity from language: "mild/little/some" = 2-4, "moderate/bit of" = 4-6, "bad/strong" = 7-8, "severe" = 9-10
 - If nothing found, return empty arrays
 - Reply only with the JSON, no other text`,
@@ -61,10 +70,12 @@ Rules:
     return {
       symptoms: parsed?.symptoms ?? [],
       drugs: parsed?.drugs ?? [],
+      isInstruction: parsed?.isInstruction ?? false,
+      instructionContent: parsed?.instructionContent,
       reply: parsed?.reply ?? "Got it, noted!",
     };
   } catch {
-    return { symptoms: [], drugs: [], reply: "Got it, noted!" };
+    return { symptoms: [], drugs: [], isInstruction: false, reply: "Got it, noted!" };
   }
 }
 

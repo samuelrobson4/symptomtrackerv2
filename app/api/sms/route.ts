@@ -15,20 +15,25 @@ export async function POST(req: NextRequest) {
 
   await prisma.message.create({ data: { direction: "inbound", body, from } });
 
-  const [symptoms, drugs, connections] = await Promise.all([
+  const [symptoms, drugs, connections, instructionRows] = await Promise.all([
     prisma.symptom.findMany({ orderBy: { createdAt: "desc" }, take: 20 }),
     prisma.drug.findMany({ orderBy: { createdAt: "desc" } }),
     prisma.connection.findMany({ where: { dismissed: false }, orderBy: { createdAt: "desc" }, take: 10 }),
+    prisma.instruction.findMany({ orderBy: { createdAt: "asc" } }),
   ]);
+  const instructions = instructionRows.map((i) => i.content);
 
   const context = `
 Current symptoms (last 20): ${symptoms.map((s) => `${s.description} (${s.createdAt.toLocaleDateString()})`).join(", ")}
 Current medications: ${drugs.map((d) => `${d.name} ${d.dosage ?? ""}`).join(", ")}
   `.trim();
 
-  const parsed = await parseSMS(body, context);
-  console.log(`SMS from ${from}: "${body.slice(0, 80)}..." → ${parsed.symptoms.length} symptoms, ${parsed.drugs.length} drugs`);
-  console.log(JSON.stringify(parsed));
+  const parsed = await parseSMS(body, context, instructions);
+  console.log(`SMS from ${from}: "${body.slice(0, 80)}..." → ${parsed.symptoms.length} symptoms, ${parsed.drugs.length} drugs, instruction: ${parsed.isInstruction}`);
+
+  if (parsed.isInstruction && parsed.instructionContent) {
+    await prisma.instruction.create({ data: { content: parsed.instructionContent } });
+  }
 
   // Store all symptoms
   for (const symptom of parsed.symptoms) {
