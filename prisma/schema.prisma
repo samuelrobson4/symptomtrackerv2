@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Symptom {
+  id          String   @id @default(cuid())
+  description String
+  severity    Int?
+  notes       String?
+  rawMessage  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Drug {
+  id           String   @id @default(cuid())
+  name         String
+  dosage       String?
+  frequency    String?
+  startDate    DateTime @default(now())
+  sideEffects  Json     @default("[]")
+  interactions Json     @default("[]")
+  fdaData      Json     @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Connection {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  symptomIds  Json     @default("[]")
+  drugIds     Json     @default("[]")
+  confidence  String   @default("low")
+  dismissed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  direction String
+  body      String
+  from      String?
+  to        String?
+  createdAt DateTime @default(now())
+}
