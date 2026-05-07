@@ -28,6 +28,7 @@ Current medications: ${drugs.map((d) => `${d.name} ${d.dosage ?? ""}`).join(", "
   `.trim();
 
   const parsed = await parseSMS(body, context);
+  console.log(`SMS from ${from}: "${body}" → parsed as: ${JSON.stringify(parsed)}`);
 
   let replyText = parsed.reply;
 
