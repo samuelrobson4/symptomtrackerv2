@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { parseSMS } from "@/lib/claude";
-import { analyzeForConnections } from "@/lib/claude";
+import { parseSMS, analyzeForConnections } from "@/lib/claude";
 import { sendSMS } from "@/lib/twilio";
 import { lookupDrug } from "@/lib/fda";
 
@@ -28,40 +27,44 @@ Current medications: ${drugs.map((d) => `${d.name} ${d.dosage ?? ""}`).join(", "
   `.trim();
 
   const parsed = await parseSMS(body, context);
-  console.log(`SMS from ${from}: "${body}" → parsed as: ${JSON.stringify(parsed)}`);
+  console.log(`SMS from ${from}: "${body.slice(0, 80)}..." → ${parsed.symptoms.length} symptoms, ${parsed.drugs.length} drugs`);
+  console.log(JSON.stringify(parsed));
 
-  let replyText = parsed.reply;
-
-  if (parsed.type === "symptom" && parsed.symptom) {
+  // Store all symptoms
+  for (const symptom of parsed.symptoms) {
     await prisma.symptom.create({
       data: {
-        description: parsed.symptom.description,
-        severity: parsed.symptom.severity ?? null,
-        notes: parsed.symptom.notes ?? null,
+        description: symptom.description,
+        severity: symptom.severity ?? null,
+        notes: symptom.notes ?? null,
         rawMessage: body,
       },
     });
-  } else if (parsed.type === "drug" && parsed.drug) {
-    const fdaData = await lookupDrug(parsed.drug.name);
+  }
+
+  // Store all drugs with FDA lookup
+  for (const drug of parsed.drugs) {
+    const fdaData = await lookupDrug(drug.name);
     await prisma.drug.create({
       data: {
-        name: parsed.drug.name,
-        dosage: parsed.drug.dosage ?? null,
-        frequency: parsed.drug.frequency ?? null,
+        name: drug.name,
+        dosage: drug.dosage ?? null,
+        frequency: drug.frequency ?? null,
         sideEffects: fdaData.sideEffects,
         interactions: fdaData.interactions,
         fdaData: fdaData.raw as object,
       },
     });
-    if (fdaData.sideEffects.length > 0) {
-      replyText = `${parsed.reply} Note: ${parsed.drug.name} has ${fdaData.sideEffects.length} known side effects now tracked.`;
-    }
   }
 
-  await prisma.message.create({ data: { direction: "outbound", body: replyText, to: from } });
-  await sendSMS(from, replyText);
+  await prisma.message.create({ data: { direction: "outbound", body: parsed.reply, to: from } });
 
-  // Run connection analysis in background (non-blocking)
+  try {
+    await sendSMS(from, parsed.reply);
+  } catch (err) {
+    console.error("SMS send failed (likely pending verification):", err);
+  }
+
   runConnectionAnalysis(from).catch(console.error);
 
   return new NextResponse(
@@ -83,10 +86,14 @@ async function runConnectionAnalysis(userPhone: string) {
     await prisma.connection.create({ data: analysis.connection });
 
     if (analysis.proactiveMessage) {
-      await sendSMS(userPhone, analysis.proactiveMessage);
-      await prisma.message.create({
-        data: { direction: "outbound", body: analysis.proactiveMessage, to: userPhone },
-      });
+      try {
+        await sendSMS(userPhone, analysis.proactiveMessage);
+        await prisma.message.create({
+          data: { direction: "outbound", body: analysis.proactiveMessage, to: userPhone },
+        });
+      } catch (err) {
+        console.error("Proactive SMS failed:", err);
+      }
     }
   }
 }

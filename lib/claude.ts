@@ -2,18 +2,21 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+export interface ParsedSymptom {
+  description: string;
+  severity?: number;
+  notes?: string;
+}
+
+export interface ParsedDrug {
+  name: string;
+  dosage?: string;
+  frequency?: string;
+}
+
 export interface ParsedSMS {
-  type: "symptom" | "drug" | "question" | "unknown";
-  symptom?: {
-    description: string;
-    severity?: number;
-    notes?: string;
-  };
-  drug?: {
-    name: string;
-    dosage?: string;
-    frequency?: string;
-  };
+  symptoms: ParsedSymptom[];
+  drugs: ParsedDrug[];
   reply: string;
 }
 
@@ -26,19 +29,25 @@ export async function parseSMS(message: string, context: string): Promise<Parsed
 Context about the user's current tracked data:
 ${context}
 
-Parse the incoming SMS and respond with a JSON object with this structure:
+Parse the incoming SMS and extract ALL symptoms AND medications mentioned. A single message may contain both.
+
+Respond with JSON only:
 {
-  "type": "symptom" | "drug" | "question" | "unknown",
-  "symptom": { "description": string, "severity": number (1-10, optional), "notes": string (optional) },
-  "drug": { "name": string, "dosage": string (optional), "frequency": string (optional) },
-  "reply": string (short friendly SMS reply, max 160 chars)
+  "symptoms": [
+    { "description": string, "severity": number (1-10, optional), "notes": string (optional) }
+  ],
+  "drugs": [
+    { "name": string, "dosage": string (e.g. "300mg"), "frequency": string (e.g. "once daily") }
+  ],
+  "reply": string (short friendly SMS reply confirming what was logged, max 160 chars)
 }
 
 Rules:
-- If they describe how they feel, it's a symptom
-- If they mention taking or starting a medication, it's a drug
-- Be concise in replies
-- For symptoms, extract severity if mentioned (e.g. "bad headache" = 7, "mild nausea" = 3)
+- Extract EVERY symptom mentioned (flu-like feelings, fatigue, itching, etc. are all separate symptoms)
+- Extract drug name cleanly (e.g. "Dupixent" not "dupixent 300mg injection")
+- Dosage should be clean (e.g. "300mg/2ml" not "300 mg two mil injection")
+- Estimate severity from language: "mild/little/some" = 2-4, "moderate/bit of" = 4-6, "bad/strong" = 7-8, "severe" = 9-10
+- If nothing found, return empty arrays
 - Reply only with the JSON, no other text`,
     messages: [{ role: "user", content: message }],
   });
@@ -46,9 +55,14 @@ Rules:
   const text = response.content[0].type === "text" ? response.content[0].text : "";
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    return jsonMatch ? JSON.parse(jsonMatch[0]) : { type: "unknown", reply: "Got it, noted!" };
+    const parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+    return {
+      symptoms: parsed?.symptoms ?? [],
+      drugs: parsed?.drugs ?? [],
+      reply: parsed?.reply ?? "Got it, noted!",
+    };
   } catch {
-    return { type: "unknown", reply: "Got it, noted!" };
+    return { symptoms: [], drugs: [], reply: "Got it, noted!" };
   }
 }
 
