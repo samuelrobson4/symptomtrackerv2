@@ -12,6 +12,7 @@ export interface ParsedDrug {
   name: string;
   dosage?: string;
   frequency?: string;
+  isNewDrug: boolean; // true = starting for first time, false = logging a dose of existing drug
 }
 
 export interface ParsedSMS {
@@ -37,7 +38,7 @@ Respond with JSON only:
     { "description": string, "severity": number (1-10, optional), "notes": string (optional) }
   ],
   "drugs": [
-    { "name": string, "dosage": string (e.g. "300mg"), "frequency": string (e.g. "once daily") }
+    { "name": string, "dosage": string (e.g. "300mg"), "frequency": string (e.g. "once daily"), "isNewDrug": boolean }
   ],
   "reply": string (short friendly SMS reply confirming what was logged, max 160 chars)
 }
@@ -46,6 +47,7 @@ Rules:
 - Extract EVERY symptom mentioned (flu-like feelings, fatigue, itching, etc. are all separate symptoms)
 - Extract drug name cleanly (e.g. "Dupixent" not "dupixent 300mg injection")
 - Dosage should be clean (e.g. "300mg/2ml" not "300 mg two mil injection")
+- isNewDrug = true if they say "started", "beginning", "first time", "just got". false if they say "took", "took my", "had my dose", "injected today" (i.e. a recurring dose of an existing drug)
 - Estimate severity from language: "mild/little/some" = 2-4, "moderate/bit of" = 4-6, "bad/strong" = 7-8, "severe" = 9-10
 - If nothing found, return empty arrays
 - Reply only with the JSON, no other text`,

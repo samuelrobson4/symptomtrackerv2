@@ -8,6 +8,7 @@ interface Symptom {
   description: string;
   severity: number | null;
   notes: string | null;
+  rawMessage: string | null;
   createdAt: string;
 }
 
@@ -21,14 +22,12 @@ const severityColor = (s: number | null) => {
 export default function SymptomsPage() {
   const [symptoms, setSymptoms] = useState<Symptom[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/symptoms")
       .then((r) => r.json())
-      .then((data) => {
-        setSymptoms(data);
-        setLoading(false);
-      });
+      .then((data) => { setSymptoms(data); setLoading(false); });
   }, []);
 
   const dismiss = async (id: string) => {
@@ -74,51 +73,51 @@ export default function SymptomsPage() {
       <div className="space-y-8">
         {Object.entries(grouped).map(([day, items]) => (
           <div key={day}>
-            <p className="text-xs font-medium text-[#5f6368] uppercase tracking-wide mb-3">
-              {day}
-            </p>
+            <p className="text-xs font-medium text-[#5f6368] uppercase tracking-wide mb-3">{day}</p>
             <div className="space-y-2">
               {items.map((s) => (
                 <div
                   key={s.id}
-                  className="bg-white rounded-xl border border-[#e0e0e0] px-5 py-4 flex items-start gap-4 group hover:shadow-sm transition-shadow"
+                  className="bg-white rounded-xl border border-[#e0e0e0] overflow-hidden group hover:shadow-sm transition-shadow"
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[#202124] font-medium capitalize">{s.description}</p>
-                    {s.notes && (
-                      <p className="text-[#5f6368] text-sm mt-0.5">{s.notes}</p>
-                    )}
-                    <p className="text-[#9aa0a6] text-xs mt-1">
-                      {format(new Date(s.createdAt), "h:mm a")}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {s.severity && (
-                      <span
-                        className={`text-xs font-medium px-2.5 py-1 rounded-full ${severityColor(s.severity)}`}
+                  <div className="px-5 py-4 flex items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[#202124] font-medium capitalize">{s.description}</p>
+                      {s.notes && <p className="text-[#5f6368] text-sm mt-0.5">{s.notes}</p>}
+                      <div className="flex items-center gap-3 mt-1">
+                        <p className="text-[#9aa0a6] text-xs">{format(new Date(s.createdAt), "h:mm a")}</p>
+                        {s.rawMessage && (
+                          <button
+                            onClick={() => setExpanded(expanded === s.id ? null : s.id)}
+                            className="text-xs text-[#1a73e8] hover:underline"
+                          >
+                            {expanded === s.id ? "Hide original" : "View original"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      {s.severity && (
+                        <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${severityColor(s.severity)}`}>
+                          {s.severity}/10
+                        </span>
+                      )}
+                      <button
+                        onClick={() => dismiss(s.id)}
+                        className="opacity-0 group-hover:opacity-100 text-[#9aa0a6] hover:text-[#5f6368] transition-opacity p-1"
                       >
-                        {s.severity}/10
-                      </span>
-                    )}
-                    <button
-                      onClick={() => dismiss(s.id)}
-                      className="opacity-0 group-hover:opacity-100 text-[#9aa0a6] hover:text-[#5f6368] transition-opacity p-1"
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
+                  {expanded === s.id && s.rawMessage && (
+                    <div className="px-5 pb-4 border-t border-[#f1f3f4]">
+                      <p className="text-xs font-medium text-[#5f6368] uppercase tracking-wide mt-3 mb-1">Original message</p>
+                      <p className="text-sm text-[#5f6368] italic leading-relaxed">&ldquo;{s.rawMessage}&rdquo;</p>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

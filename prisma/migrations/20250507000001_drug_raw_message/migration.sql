@@ -1,0 +1,1 @@
+ALTER TABLE "Drug" ADD COLUMN "rawMessage" TEXT;

@@ -1,0 +1,11 @@
+CREATE TABLE "Dose" (
+    "id" TEXT NOT NULL,
+    "drugId" TEXT NOT NULL,
+    "dosage" TEXT,
+    "rawMessage" TEXT,
+    "takenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Dose_pkey" PRIMARY KEY ("id")
+);
+
+ALTER TABLE "Dose" ADD CONSTRAINT "Dose_drugId_fkey" FOREIGN KEY ("drugId") REFERENCES "Drug"("id") ON DELETE CASCADE ON UPDATE CASCADE;

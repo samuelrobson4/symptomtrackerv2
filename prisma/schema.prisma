@@ -26,6 +26,8 @@ model Drug {
   sideEffects  Json     @default("[]")
   interactions Json     @default("[]")
   fdaData      Json     @default("{}")
+  rawMessage   String?
+  doses        Dose[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -39,6 +41,15 @@ model Connection {
   confidence  String   @default("low")
   dismissed   Boolean  @default(false)
   createdAt   DateTime @default(now())
+}
+
+model Dose {
+  id         String   @id @default(cuid())
+  drugId     String
+  drug       Drug     @relation(fields: [drugId], references: [id], onDelete: Cascade)
+  dosage     String?
+  rawMessage String?
+  takenAt    DateTime @default(now())
 }
 
 model Message {

@@ -42,19 +42,43 @@ Current medications: ${drugs.map((d) => `${d.name} ${d.dosage ?? ""}`).join(", "
     });
   }
 
-  // Store all drugs with FDA lookup
+  // Store all drugs with FDA lookup, or log a dose if drug already exists
   for (const drug of parsed.drugs) {
-    const fdaData = await lookupDrug(drug.name);
-    await prisma.drug.create({
-      data: {
-        name: drug.name,
-        dosage: drug.dosage ?? null,
-        frequency: drug.frequency ?? null,
-        sideEffects: fdaData.sideEffects,
-        interactions: fdaData.interactions,
-        fdaData: fdaData.raw as object,
-      },
+    const existingDrug = await prisma.drug.findFirst({
+      where: { name: { equals: drug.name, mode: "insensitive" } },
     });
+
+    if (!drug.isNewDrug && existingDrug) {
+      // Log a dose against the existing drug record
+      await prisma.dose.create({
+        data: {
+          drugId: existingDrug.id,
+          dosage: drug.dosage ?? existingDrug.dosage ?? null,
+          rawMessage: body,
+        },
+      });
+    } else if (!existingDrug) {
+      // New drug — create it and log the first dose
+      const fdaData = await lookupDrug(drug.name);
+      const newDrug = await prisma.drug.create({
+        data: {
+          name: drug.name,
+          dosage: drug.dosage ?? null,
+          frequency: drug.frequency ?? null,
+          sideEffects: fdaData.sideEffects,
+          interactions: fdaData.interactions,
+          fdaData: fdaData.raw as object,
+          rawMessage: body,
+        },
+      });
+      await prisma.dose.create({
+        data: {
+          drugId: newDrug.id,
+          dosage: drug.dosage ?? null,
+          rawMessage: body,
+        },
+      });
+    }
   }
 
   await prisma.message.create({ data: { direction: "outbound", body: parsed.reply, to: from } });
